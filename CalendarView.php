@@ -1,10 +1,25 @@
 <!DOCTYPE html>
 <?php
+$available_rooms = array("Toilettes", "Salle de bains", "Sauna");
 $slots = array("8:10", "9:00", "9:50", "11:00", "11:50", "12:40", "13:35", "14:25", "15:15");
 $days = array("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi");
-$weekstart = date_create_immutable("2022-09-26");
-$available_rooms = array("Toilettes", "Salle de bains", "Sauna");
-$current_room = "Sauna";
+
+if (array_key_exists('room', $_GET))
+    $current_room = $_GET['room'];
+else
+    $current_room = $available_rooms[0];
+
+if (array_key_exists('weekstart', $_GET))
+    $weekstart_param = strtotime($_GET['weekstart']);
+else
+    $weekstart_param = strtotime("now");
+$dayofweek = date('w', $weekstart_param);
+if ($dayofweek == 0)
+    $dayofweek += 7;
+$weekstart = (new DateTimeImmutable())
+    ->setTimestamp($weekstart_param)
+    ->sub(date_interval_create_from_date_string(($dayofweek - 1)." days"));
+
 $reversations = array(
     "Lundi" => array(
         "9:50" => "Lorianne Ruelle"
@@ -101,13 +116,59 @@ $reversations = array(
             document.getElementById("slot").value = slot;
             document.getElementById("formLayout").style.visibility = "visible";
         }
+
+        // Taken from https://stackoverflow.com/a/10997390
+        function updateURLParameter(url, param, paramVal)
+        {
+            var TheAnchor = null;
+            var newAdditionalURL = "";
+            var tempArray = url.split("?");
+            var baseURL = tempArray[0];
+            var additionalURL = tempArray[1];
+            var temp = "";
+
+            if (additionalURL)
+            {
+                var tmpAnchor = additionalURL.split("#");
+                var TheParams = tmpAnchor[0];
+                TheAnchor = tmpAnchor[1];
+                if(TheAnchor)
+                    additionalURL = TheParams;
+
+                tempArray = additionalURL.split("&");
+
+                for (var i=0; i<tempArray.length; i++)
+                {
+                    if(tempArray[i].split('=')[0] != param)
+                    {
+                        newAdditionalURL += temp + tempArray[i];
+                        temp = "&";
+                    }
+                }
+            }
+            else
+            {
+                var tmpAnchor = baseURL.split("#");
+                var TheParams = tmpAnchor[0];
+                TheAnchor  = tmpAnchor[1];
+
+                if(TheParams)
+                    baseURL = TheParams;
+            }
+
+            if(TheAnchor)
+                paramVal += "#" + TheAnchor;
+
+            var rows_txt = temp + "" + param + "=" + paramVal;
+            return baseURL + "?" + newAdditionalURL + rows_txt;
+        }
     </script>
 </head>
 <body>
-<div style="padding: 10px; height: 40px">
+<div style="padding: 10px; height: 50px; font-size: 14pt;">
     <form style="position: absolute; left: 10px">
         <label for="roomSelection">Local&nbsp;:</label>
-        <select id="roomSelection" name="roomSelection" autocomplete="off">
+        <select id="roomSelection" name="roomSelection" autocomplete="off" onchange="location.href = updateURLParameter(location.href, 'room', document.getElementById('roomSelection').value)">
             <?php
                 foreach ($available_rooms as $room) {
                     if ($room == $current_room)
@@ -119,13 +180,17 @@ $reversations = array(
         </select>
     </form>
     <div style="position: absolute; right: 10px">
-        <i class="glyphicon glyphicon-chevron-left"></i>
+        <?php
+            echo "<i class=\"glyphicon glyphicon-chevron-left\" onclick=\"location.href = updateURLParameter(location.href, 'weekstart', '".date_format($weekstart->add(date_interval_create_from_date_string("-7 days")), "Y-m-d")."')\"></i>";
+        ?>
         <span class="week">
             <?php
             echo "Semaine du ".date_format($weekstart, "d/m/Y")." au ".date_format($weekstart->add(date_interval_create_from_date_string("4 days")), "d/m/Y");
             ?>
         </span>
-        <i class="glyphicon glyphicon-chevron-right"></i>
+        <?php
+            echo "<i class=\"glyphicon glyphicon-chevron-right\" onclick=\"location.href = updateURLParameter(location.href, 'weekstart', '".date_format($weekstart->add(date_interval_create_from_date_string("7 days")), "Y-m-d")."')\"></i>";
+        ?>
     </div>
 </div>
 <div class="table">
@@ -159,7 +224,7 @@ $reversations = array(
     }
     ?>
 </div>
-<div id="formLayout" style="visibility: visible">
+<div id="formLayout" style="visibility: hidden">
     <form id="bookingForm" >
         <table>
             <tr>
@@ -181,10 +246,6 @@ $reversations = array(
             <tr>
                 <td><label for="slot">Plage horaire&nbsp;:</label></td>
                 <td><input type="text" id="slot" name="slot" readonly="readonly"/></td>
-            </tr>
-            <tr>
-                <td><label type="until">Date de fin&nbsp;:</label></td>
-                <td><input type="text" id="enddate" name="enddate"/></td>
             </tr>
         </table>
         <input type="submit" value="Enregistrer la réservation" style="margin-top: 10pt; width: 100%"/>
