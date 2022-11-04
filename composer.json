@@ -1,0 +1,18 @@
+{
+  "name": "bobzomer/room-calendar",
+  "description": "Calendar and room booking tool for ISC Mons",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "BrunoObsomer",
+      "email": "bobzomer@gmail.com"
+    }
+  ],
+  "require": {
+    "thenetworg/oauth2-azure": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "ext-ctype": "*"
+  }
+}
