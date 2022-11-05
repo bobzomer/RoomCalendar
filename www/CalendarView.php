@@ -1,8 +1,11 @@
 <?php
-require_once 'database_access.php';
-require_once 'authentication.php';
+require_once '../database_access.php';
+require_once '../authentication.php';
+
+\Sentry\init(['dsn' => $_ENV['SENTRY_DSN']]);
 
 if (array_key_exists('error', $_GET)) {
+    \Sentry\captureMessage($_GET['error'] . ": " .  $_GET['error_description']);
     $error = $_GET['error'];
     $error_description = nl2br($_GET['error_description']);
     echo <<<html
@@ -17,19 +20,21 @@ html;
     exit();
 }
 
-session_start();
+try {
+    session_start();
 
-$conn = new Database();
-$settings = $conn->getSettings();
+    $conn = new Database();
+    $settings = $conn->getSettings();
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $settings['AppId'] = $_POST['AppId'];
-    $settings['AppSecret'] = $_POST['AppSecret'];
-    $settings = $conn->setSettings($settings);
-}
+    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+        $settings['AppId'] = $_POST['AppId'];
+        $settings['AppSecret'] = $_POST['AppSecret'];
+        $settings['Tenant'] = $_POST['Tenant'];
+        $settings = $conn->setSettings($settings);
+    }
 
-if (!isset($settings['AppId'])) {
-    echo <<<html
+    if (!isset($settings['AppId'])) {
+        echo <<<html
 <!DOCTYPE html>
 <html><head><title>Initial setup</title></head>
 <body>
@@ -44,64 +49,72 @@ if (!isset($settings['AppId'])) {
 <td><label for="AppSecret">AppSecret</label></td>
 <td><input id="AppSecret" name="AppSecret" /></td>
 </tr>
+<tr>
+<td><label for="Tenant">Tenant</label></td>
+<td><input id="Tenant" name="Tenant" /></td>
+</tr>
 </table>
 <input type="submit" value="Enregistrer" id="form_submit" />
 </form></body></html>
 html;
-    exit();
-}
-$user_name = checkOrAuthenticate($settings['AppId'], $settings['AppSecret']);
-if (array_key_exists('code', $_GET)) {
-    header('Location: '.getCurrentUrl());
-    exit();
-}
-$user = $conn->getUserByName($user_name);
+        exit();
+    }
+    $user_name = checkOrAuthenticate($settings['AppId'], $settings['AppSecret'], $settings['Tenant']);
+    if (array_key_exists('code', $_GET)) {
+        header('Location: ' . getCurrentUrl());
+        exit();
+    }
+    $user = $conn->getUserByName($user_name);
 
-if (array_key_exists('slot_id', $_GET)) {
-    $room_id = intval($_GET['room_id']);
-    $date = new DateTimeImmutable($_GET['date']);
-    if (array_key_exists('to_delete_booking_id', $_GET) && !empty($_GET['to_delete_booking_id'])) {
-        $booking_id = intval($_GET['to_delete_booking_id']);
-        $booking_user = $conn->getBookingUser($booking_id);
-        if ($user->is_admin || $booking_user->id == $user->id) {
-            $conn->deleteBooking($booking_id);
+    if (array_key_exists('slot_id', $_GET)) {
+        $room_id = intval($_GET['room_id']);
+        $date = new DateTimeImmutable($_GET['date']);
+        if (array_key_exists('to_delete_booking_id', $_GET) && !empty($_GET['to_delete_booking_id'])) {
+            $booking_id = intval($_GET['to_delete_booking_id']);
+            $booking_user = $conn->getBookingUser($booking_id);
+            if ($user->is_admin || $booking_user->id == $user->id) {
+                $conn->deleteBooking($booking_id);
+            }
+        } else {
+            // This is a booking request => book the room
+            $slot_id = intval($_GET['slot_id']);
+            $conn->addBooking($room_id, $user->id, $slot_id, $date);
         }
+        $weekstart = $date->format('Y-m-d');
+        echo "<html><head><script>window.location.replace(location.href.split('?')[0] + '?room_id=$room_id&weekstart=$weekstart')</script></head></html>";
+        exit();
     }
-    else {
-        // This is a booking request => book the room
-        $slot_id = intval($_GET['slot_id']);
-        $conn->addBooking($room_id, $user->id, $slot_id, $date);
-    }
-    $weekstart = $date->format('Y-m-d');
-    echo "<html><head><script>window.location.replace(location.href.split('?')[0] + '?room_id=$room_id&weekstart=$weekstart')</script></head></html>";
-    exit();
+
+    $available_rooms = $conn->getRoomList();
+    $slots = $conn->getSlots();
+
+    $days = array("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi");
+
+    if (array_key_exists('room_id', $_GET))
+        $current_room = array_values(array_filter($available_rooms, function ($r) {
+            return strval($r->id) == $_GET['room_id'];
+        }))[0];
+    else
+        $current_room = $available_rooms[0];
+
+    if (array_key_exists('weekstart', $_GET))
+        $weekstart_param = strtotime($_GET['weekstart']);
+    else
+        $weekstart_param = strtotime("now");
+    $dayofweek = date('w', $weekstart_param);
+    if ($dayofweek == 0)
+        $dayofweek += 7;
+    $weekstart = (new DateTimeImmutable())
+        ->setTimestamp($weekstart_param)
+        ->sub(date_interval_create_from_date_string(($dayofweek - 1) . " days"));
+    $weekstop = $weekstart->add(date_interval_create_from_date_string("4 days"));
+
+    $reversations = $conn->getBookings($current_room->id, $weekstart, $weekstop);
 }
-
-$available_rooms = $conn->getRoomList();
-$slots = $conn->getSlots();
-
-$days = array("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi");
-
-if (array_key_exists('room_id', $_GET))
-    $current_room = array_values(array_filter($available_rooms, function ($r) {
-        return strval($r->id) == $_GET['room_id'];
-    }))[0];
-else
-    $current_room = $available_rooms[0];
-
-if (array_key_exists('weekstart', $_GET))
-    $weekstart_param = strtotime($_GET['weekstart']);
-else
-    $weekstart_param = strtotime("now");
-$dayofweek = date('w', $weekstart_param);
-if ($dayofweek == 0)
-    $dayofweek += 7;
-$weekstart = (new DateTimeImmutable())
-    ->setTimestamp($weekstart_param)
-    ->sub(date_interval_create_from_date_string(($dayofweek - 1)." days"));
-$weekstop = $weekstart->add(date_interval_create_from_date_string("4 days"));
-
-$reversations = $conn->getBookings($current_room->id, $weekstart, $weekstop);
+catch (Exception $exc) {
+    \Sentry\captureException($exc);
+    throw $exc;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -326,7 +339,7 @@ $reversations = $conn->getBookings($current_room->id, $weekstart, $weekstop);
                 else
                     $className = "reserved";
                 if ($reservation_name == $user->name || $user->is_admin)
-                    $deletionCode = "<div class=\"deleteButton\" onclick=\"displayDeletionForm($booking_id, '$user->name', $current_room->id, '$current_room->name', '$str_current_day', '".date_format($current_day, "d/m/Y")."', $slot->id, '$start - $stop');\"><i class=\"glyphicon glyphicon-remove\"></i></div>";
+                    $deletionCode = "<div class=\"deleteButton\" onclick=\"displayDeletionForm($booking_id, '$reservation_name', $current_room->id, '$current_room->name', '$str_current_day', '".date_format($current_day, "d/m/Y")."', $slot->id, '$start - $stop');\"><i class=\"glyphicon glyphicon-remove\"></i></div>";
                 else
                     $deletionCode = "";
 

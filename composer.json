@@ -13,6 +13,8 @@
     "thenetworg/oauth2-azure": "*",
     "ext-pdo": "*",
     "ext-pdo_mysql": "*",
-    "ext-ctype": "*"
+    "ext-ctype": "*",
+    "sentry/sdk": "*",
+    "vlucas/phpdotenv": "*"
   }
 }

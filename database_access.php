@@ -1,4 +1,9 @@
 <?php
+require_once 'vendor/autoload.php';
+
+$dotenv = \Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
 class Room
 {
     /** @readonly */
@@ -49,28 +54,27 @@ class User
 
 class Database
 {
-    /** @readonly */
-    private static string $servername = "localhost";
-    /** @readonly */
-    private static string $username = "root";
-    /** @readonly */
-    private static string $password = "my-secret-pw";
-    /** @readonly */
-    private static string $db = "room_calendar";
-
     private PDO $conn;
 
     public function __construct()
     {
-        $servername = Database::$servername;
-        $db = Database::$db;
+        $servername = $_ENV['DATABASE_SERVERNAME'];
+        $db = $_ENV['DATABASE_DB'];
         try {
-            $this->conn = new PDO("mysql:host=$servername;dbname=$db", Database::$username, Database::$password);
+            $this->conn = new PDO("mysql:host=$servername;dbname=$db", $_ENV['DATABASE_USERNAME'], $_ENV['DATABASE_PASSWORD']);
             // set the PDO error mode to exception
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            try {
+                $this->getSettings();
+            }
+            catch (PDOException $exc2) {
+                \Sentry\captureException($exc2);
+                $this->createTables();
+            }
         }
         catch (PDOException $exc) {
-            $this->conn = new PDO("mysql:host=$servername", Database::$username, Database::$password);
+            \Sentry\captureException($exc2);
+            $this->conn = new PDO("mysql:host=$servername", $_ENV['DATABASE_USERNAME'], $_ENV['DATABASE_PASSWORD']);
             // set the PDO error mode to exception
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->createDatabase();
@@ -79,11 +83,20 @@ class Database
 
     protected function createDatabase() : void
     {
-        $db = Database::$db;
+        $db = $_ENV['DATABASE_DB'];
         //language=sql
         $query = <<<EOQ
 CREATE DATABASE $db;
 USE $db;
+EOQ;
+        $this->conn->exec($query);
+        $this->createTables();
+    }
+
+    protected function createTables() : void
+    {
+        //language=sql
+        $query = <<<EOQ
 CREATE TABLE settings (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(50) NOT NULL,
@@ -100,7 +113,7 @@ CREATE TABLE rooms (
 CREATE TABLE users (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(100) NOT NULL,
-    is_admin bit NOT NULL DEFAULT (0),
+    is_admin boolean NOT NULL DEFAULT false,
     PRIMARY KEY (id)
 );
 CREATE TABLE slots (

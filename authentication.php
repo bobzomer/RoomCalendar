@@ -16,7 +16,7 @@ function getCurrentUrl() : string
     return $url;
 }
 
-function checkOrAuthenticate(string $appId, string $appSecret) : string
+function checkOrAuthenticate(string $appId, string $appSecret, string $tenant) : string
 {
     if (isset($_SESSION['username']) && !ctype_space($_SESSION['username'])) {
         return $_SESSION['username'];
@@ -25,18 +25,18 @@ function checkOrAuthenticate(string $appId, string $appSecret) : string
         $token = $_SESSION['token'];
     }
     else {
-        $token = authenticate($appId, $appSecret);
+        $token = authenticate($appId, $appSecret, $tenant);
         $_SESSION['token'] = $token;
     }
 
-    [$user_name, $token] = getUsername($appId, $appSecret, $token);
+    [$user_name, $token] = getUsername($appId, $appSecret, $tenant, $token);
     $_SESSION['username'] = $user_name;
     $_SESSION['token'] = $token;
 
     return $user_name;
 }
 
-function getProvider(string $appId, string $appSecret) : TheNetworg\OAuth2\Client\Provider\Azure
+function getProvider(string $appId, string $appSecret, string $tenant) : TheNetworg\OAuth2\Client\Provider\Azure
 {
     $provider = new TheNetworg\OAuth2\Client\Provider\Azure([
         'clientId'          => $appId,
@@ -44,14 +44,14 @@ function getProvider(string $appId, string $appSecret) : TheNetworg\OAuth2\Clien
         'redirectUri'       => getCurrentUrl(),
         'scopes'            => ['openid'],
         'defaultEndPointVersion' => '2.0',
-        'tenant'            => 'iscmons.be',
+        'tenant'            => $tenant,
     ]);
     return $provider;
 }
 
-function authenticate(string $appId, string $appSecret) : \League\OAuth2\Client\Token\AccessTokenInterface
+function authenticate(string $appId, string $appSecret, string $tenant) : \League\OAuth2\Client\Token\AccessTokenInterface
 {
-    $provider = getProvider($appId, $appSecret);
+    $provider = getProvider($appId, $appSecret, $tenant);
 
     if (isset($_GET['code']) && isset($_SESSION['OAuth2.state']) && isset($_GET['state'])) {
         if ($_GET['state'] == $_SESSION['OAuth2.state']) {
@@ -77,9 +77,9 @@ function authenticate(string $appId, string $appSecret) : \League\OAuth2\Client\
     }
 }
 
-function getUsername(string $appId, string $appSecret, \League\OAuth2\Client\Token\AccessTokenInterface $token)
+function getUsername(string $appId, string $appSecret, string $tenant, \League\OAuth2\Client\Token\AccessTokenInterface $token)
 {
-    $provider = getProvider($appId, $appSecret);
+    $provider = getProvider($appId, $appSecret, $tenant);
 
     if ($token->hasExpired()) {
         if (!is_null($token->getRefreshToken())) {
@@ -100,11 +100,11 @@ function getUsername(string $appId, string $appSecret, \League\OAuth2\Client\Tok
     return [$user['displayName'], $token];
 }
 
-function logout(string $appId, string $appSecret)
+function logout(string $appId, string $appSecret, string $tenant)
 {
-    $logout_url = 'https://iscmons.be/';
+    $logout_url = "https://$tenant/";
     if (isset($_SESSION['username'])) {
-        $provider = getProvider($appId, $appSecret);
+        $provider = getProvider($appId, $appSecret, $tenant);
         $logout_url = $provider->getLogoutUrl($logout_url);
     }
     session_destroy();

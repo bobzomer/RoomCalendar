@@ -1,0 +1,7 @@
+RewriteEngine on
+RewriteCond %{HTTP_HOST} ^www\.outils\-iscmons\.be$ [NC]
+RewriteRule ^(.*)$ https://outils-iscmons.be/$1 [L,R=301,NC]
+
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^.*$ https://%{SERVER_NAME}%{REQUEST_URI} [R,L]
