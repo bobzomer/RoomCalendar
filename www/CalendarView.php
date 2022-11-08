@@ -139,6 +139,7 @@ catch (Exception $exc) {
 
         .hours {
             flex: 0.5;
+            white-space: nowrap;
         }
 
         .header {
@@ -163,10 +164,10 @@ catch (Exception $exc) {
             height: 60px;
             line-height: 60px;
             text-align: center;
+            white-space: nowrap;
         }
         .deleteButton {
-            position: relative;
-            left: 20px;
+            margin-left: 20px;
             display: inline-block;
         }
 
