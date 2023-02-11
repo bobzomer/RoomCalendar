@@ -78,7 +78,8 @@ html;
         } else {
             // This is a booking request => book the room
             $slot_id = intval($_GET['slot_id']);
-            $conn->addBooking($room_id, $user->id, $slot_id, $date);
+            $description = $_GET['description'];
+            $conn->addBooking($room_id, $user->id, $slot_id, $date, $description);
         }
         $weekstart = $date->format('Y-m-d');
         echo "<html><head><script>window.location.replace(location.href.split('?')[0] + '?room_id=$room_id&weekstart=$weekstart')</script></head></html>";
@@ -205,9 +206,28 @@ catch (Exception $exc) {
         .closeButton {
             text-align: right;
         }
+        .tooltiptext {
+            visibility: hidden;
+            text-align: center;
+            border-radius: 6px;
+            border-style: solid;
+            border-width: 1px;
+            padding: 5px;
+            background-color: white;
+            color: black;
+            line-height: normal;
+
+            /* Position the tooltip */
+            z-index: 1;
+            position: absolute;
+        }
+
+        .slot:hover .tooltiptext {
+            visibility: visible;
+        }
     </style>
     <script>
-        function displayForm(user, room_id, room, date, displayedDate, slot_id, slot) {
+        function displayForm(user, room_id, room, date, displayedDate, slot_id, slot, description) {
             document.getElementById("name").value = user;
             document.getElementById("room_id").value = room_id;
             document.getElementById("room").value = room;
@@ -215,20 +235,25 @@ catch (Exception $exc) {
             document.getElementById("displayedDate").value = displayedDate;
             document.getElementById("slot_id").value = slot_id;
             document.getElementById("slot").value = slot;
+            document.getElementById("description").value = description === undefined ? "" : description;
             document.getElementById("formLayout").style.visibility = "visible";
         }
-        function displayDeletionForm(booking_id, user, room_id, room, date, displayedDate, slot_id, slot)
+        function displayDeletionForm(booking_id, user, room_id, room, date, displayedDate, slot_id, slot, description)
         {
-            displayForm(user, room_id, room, date, displayedDate, slot_id, slot);
+            displayForm(user, room_id, room, date, displayedDate, slot_id, slot, description);
+            document.getElementById("description").readOnly = true;
+            document.getElementById("description").placeholder = "";
             document.getElementById("to_delete_booking_id").value = booking_id;
-            document.getElementById("form_submit").value = "Supprimer la réservation"
+            document.getElementById("form_submit").value = "Supprimer la réservation";
         }
 
         function displayAdditionForm(user, room_id, room, date, displayedDate, slot_id, slot)
         {
-            displayForm(user, room_id, room, date, displayedDate, slot_id, slot);
+            displayForm(user, room_id, room, date, displayedDate, slot_id, slot, "");
+            document.getElementById("description").readOnly = false;
+            document.getElementById("description").placeholder = "facultatif";
             document.getElementById("to_delete_booking_id").value = null;
-            document.getElementById("form_submit").value = "Enregistrer la réservation"
+            document.getElementById("form_submit").value = "Enregistrer la réservation";
         }
 
         // Taken from https://stackoverflow.com/a/10997390
@@ -334,17 +359,24 @@ catch (Exception $exc) {
             $start = $slot->start_time->format('H:i');
             $stop = $slot->stop_time->format('H:i');
             if (array_key_exists($str_current_day, $reversations) && array_key_exists($slot->id, $reversations[$str_current_day])) {
-                [$reservation_name, $booking_id] = $reversations[$str_current_day][$slot->id];
+                [$reservation_name, $booking_id, $description] = $reversations[$str_current_day][$slot->id];
                 if ($reservation_name == $user->name)
                     $className = "reserved-myself";
                 else
                     $className = "reserved";
                 if ($reservation_name == $user->name || $user->is_admin)
-                    $deletionCode = "<div class=\"deleteButton\" onclick=\"displayDeletionForm($booking_id, '$reservation_name', $current_room->id, '$current_room->name', '$str_current_day', '".date_format($current_day, "d/m/Y")."', $slot->id, '$start - $stop');\"><i class=\"glyphicon glyphicon-remove\"></i></div>";
+                    $deletionCode = "<div class=\"deleteButton\" onclick=\"displayDeletionForm($booking_id, '$reservation_name', $current_room->id, '$current_room->name', '$str_current_day', '".date_format($current_day, "d/m/Y")."', $slot->id, '$start - $stop', '$description');\"><i class=\"glyphicon glyphicon-remove\"></i></div>";
                 else
                     $deletionCode = "";
 
-                echo "  <div class=\"slot $className\">$reservation_name$deletionCode</div>\n";
+                if (empty($description))
+                    $tooltip = "";
+                else {
+                    $tooltip = "<div class=\"tooltiptext\">Réservé par: $reservation_name<br/>Description: $description</div>";
+                    $reservation_name = $description;
+                }
+
+                echo "  <div class=\"slot $className\">$reservation_name$deletionCode$tooltip</div>\n";
             }
             else
                 echo "  <div class=\"slot\" onclick=\"displayAdditionForm('$user->name', $current_room->id, '$current_room->name', '$str_current_day', '".date_format($current_day, "d/m/Y")."', $slot->id, '$start - $stop');\"></div>\n";
@@ -363,32 +395,38 @@ catch (Exception $exc) {
             <tr>
                 <td><label for="name">Nom&nbsp;:</label></td>
                 <td>
-                    <input type="text" id="name" readonly="readonly"/>
+                    <input type="text" id="name" readonly/>
                 </td>
             </tr>
             <tr>
                 <td><label for="room">Local&nbsp;:</label></td>
                 <td>
-                    <input type="hidden" id="room_id" name="room_id" readonly="readonly"/>
-                    <input type="text" id="room" readonly="readonly"/>
+                    <input type="hidden" id="room_id" name="room_id" readonly/>
+                    <input type="text" id="room" readonly/>
                 </td>
             </tr>
             <tr>
                 <td><label for="displayedDate">Date&nbsp;:</label></td>
                 <td>
-                    <input type="hidden" id="date" name="date" readonly="readonly"/>
-                    <input type="text" id="displayedDate" readonly="readonly"/>
+                    <input type="hidden" id="date" name="date" readonly/>
+                    <input type="text" id="displayedDate" readonly/>
                 </td>
             </tr>
             <tr>
                 <td><label for="slot">Plage horaire&nbsp;:</label></td>
                 <td>
-                    <input type="hidden" id="slot_id" name="slot_id" readonly="readonly"/>
-                    <input type="text" id="slot" readonly="readonly"/>
+                    <input type="hidden" id="slot_id" name="slot_id" readonly/>
+                    <input type="text" id="slot" readonly/>
+                </td>
+            </tr>
+            <tr>
+                <td><label for="description">Description&nbsp;:</label></td>
+                <td>
+                    <input type="text" id="description" name="description"/>
                 </td>
             </tr>
         </table>
-        <input type="hidden" id="to_delete_booking_id" name="to_delete_booking_id" readonly="readonly"/>
+        <input type="hidden" id="to_delete_booking_id" name="to_delete_booking_id" readonly/>
         <input type="submit" value="" id="form_submit" style="margin-top: 10pt; width: 100%"/>
     </form>
 </div>

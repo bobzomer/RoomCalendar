@@ -128,6 +128,7 @@ CREATE TABLE room_bookings (
     user_id int NOT NULL,
     slot_id int NOT NULL,
     day date NOT NULL,
+    description varchar(100) NULL,
     PRIMARY KEY (id),
     FOREIGN KEY (room_id) REFERENCES rooms(id),
     FOREIGN KEY (user_id) REFERENCES users(id),
@@ -239,6 +240,7 @@ EOQ;
 
         $query = <<<EOQ
 SELECT room_bookings.id AS id, room_bookings.day AS day,
+       room_bookings.description AS description,
        rooms.id AS room_id, rooms.name AS room_name, rooms.location AS room_location,
        users.id AS user_id, users.name AS user_name,
        slots.id AS slot_id, slots.start_time AS slot_start_time, slots.stop_time AS slot_stop_time
@@ -251,19 +253,20 @@ EOQ;
         $stmt = $this->conn->query($query, PDO::FETCH_ASSOC);
 
         foreach ($stmt->fetchAll() as $row) {
-            $result[$row['day']][$row['slot_id']] = [$row['user_name'], $row['id']];
+            $result[$row['day']][$row['slot_id']] = [$row['user_name'], $row['id'], $row['description']];
         }
         return $result;
     }
 
-    public function addBooking(int $room_id, int $user_id, int $slot_id, DateTimeInterface $day)
+    public function addBooking(int $room_id, int $user_id, int $slot_id, DateTimeInterface $day, string $description)
     {
         $strDay = $day->format('Y-m-d');
         $query = <<<EOQ
-INSERT INTO room_bookings(room_id, user_id, slot_id, day)
-VALUES ($room_id, $user_id, $slot_id, '$strDay');
+INSERT INTO room_bookings(room_id, user_id, slot_id, day, description)
+VALUES ($room_id, $user_id, $slot_id, '$strDay', ?);
 EOQ;
-        $this->conn->exec($query);
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$description]);
     }
 
     public function deleteBooking(int $booking_id)
