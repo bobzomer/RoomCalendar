@@ -108,6 +108,7 @@ CREATE TABLE rooms (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(50) NOT NULL,
     location varchar(5000),
+    is_enabled bit DEFAULT 1,
     PRIMARY KEY (id)
 );
 CREATE TABLE users (
@@ -177,7 +178,7 @@ EOQ;
      */
     public function getRoomList() : array
     {
-        $stmt = $this->conn->query("SELECT id, name, location FROM rooms", PDO::FETCH_ASSOC);
+        $stmt = $this->conn->query("SELECT id, name, location FROM rooms WHERE is_enabled = 1", PDO::FETCH_ASSOC);
         return array_map(fn($row): Room => new Room($row['id'], $row['name'], $row['location']), $stmt->fetchAll());
     }
 
