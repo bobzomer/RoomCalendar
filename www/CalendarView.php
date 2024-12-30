@@ -1,67 +1,31 @@
 <?php
-require_once '../database_access.php';
+require_once '../calendar_database.php';
 require_once '../authentication.php';
+require_once '../settings.php';
 
-\Sentry\init(['dsn' => $_ENV['SENTRY_DSN']]);
-
-if (array_key_exists('error', $_GET)) {
-    \Sentry\captureMessage($_GET['error'] . ": " .  $_GET['error_description']);
-    $error = $_GET['error'];
-    $error_description = nl2br($_GET['error_description']);
-    echo <<<html
-<!DOCTYPE html>
-<html><head><title>Error</title></head>
-<body>
-<h1>$error</h1>
-<code>$error_description</code>
-</body>
-</html>
-html;
-    exit();
-}
+include '../error_handling.php';
 
 try {
     session_start();
 
-    $conn = new Database();
-    $settings = $conn->getSettings();
+    $conn = new CalendarDatabase();
+    $settings = getSettings($conn);
 
-    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-        $settings['AppId'] = $_POST['AppId'];
-        $settings['AppSecret'] = $_POST['AppSecret'];
-        $settings['Tenant'] = $_POST['Tenant'];
-        $settings = $conn->setSettings($settings);
-    }
-
-    if (!isset($settings['AppId'])) {
-        echo <<<html
-<!DOCTYPE html>
-<html><head><title>Initial setup</title></head>
-<body>
-<h1>Setup</h1>
-<form method="post">
-<table>
-<tr>
-<td><label for="AppId">AppId</label></td>
-<td><input id="AppId" name="AppId" /></td>
-</tr>
-<tr>
-<td><label for="AppSecret">AppSecret</label></td>
-<td><input id="AppSecret" name="AppSecret" /></td>
-</tr>
-<tr>
-<td><label for="Tenant">Tenant</label></td>
-<td><input id="Tenant" name="Tenant" /></td>
-</tr>
-</table>
-<input type="submit" value="Enregistrer" id="form_submit" />
-</form></body></html>
-html;
-        exit();
-    }
-    $user_name = checkOrAuthenticate($settings['AppId'], $settings['AppSecret'], $settings['Tenant']);
+    [$user_name, $email] = checkOrAuthenticate($settings['AppId'], $settings['AppSecret'], $settings['Tenant']);
     if (array_key_exists('code', $_GET)) {
         header('Location: ' . getCurrentUrl());
+        exit();
+    }
+    if (str_contains($email, '@student')) {
+        echo <<<html
+<!DOCTYPE html>
+<html lang="en"><head><title>Erreur</title></head>
+<body>
+<h1>Interdit</h1>
+Page interdite aux élèves
+</body>
+</html>
+html;
         exit();
     }
     $user = $conn->getUserByName($user_name);
@@ -125,7 +89,7 @@ catch (Exception $exc) {
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
     <style>
         * {
-            font-family: Arial, SansSerif;
+            font-family: Arial, SansSerif, sans-serif;
         }
 
         .table {
@@ -226,6 +190,7 @@ catch (Exception $exc) {
             visibility: visible;
         }
     </style>
+    <script src="./tools.js" type="text/javascript"></script>
     <script>
         function displayForm(user, room_id, room, date, displayedDate, slot_id, slot, description) {
             document.getElementById("name").value = user;
@@ -254,52 +219,6 @@ catch (Exception $exc) {
             document.getElementById("description").placeholder = "facultatif";
             document.getElementById("to_delete_booking_id").value = null;
             document.getElementById("form_submit").value = "Enregistrer la réservation";
-        }
-
-        // Taken from https://stackoverflow.com/a/10997390
-        function updateURLParameter(url, param, paramVal)
-        {
-            var TheAnchor = null;
-            var newAdditionalURL = "";
-            var tempArray = url.split("?");
-            var baseURL = tempArray[0];
-            var additionalURL = tempArray[1];
-            var temp = "";
-
-            if (additionalURL)
-            {
-                var tmpAnchor = additionalURL.split("#");
-                var TheParams = tmpAnchor[0];
-                TheAnchor = tmpAnchor[1];
-                if(TheAnchor)
-                    additionalURL = TheParams;
-
-                tempArray = additionalURL.split("&");
-
-                for (var i=0; i<tempArray.length; i++)
-                {
-                    if(tempArray[i].split('=')[0] != param)
-                    {
-                        newAdditionalURL += temp + tempArray[i];
-                        temp = "&";
-                    }
-                }
-            }
-            else
-            {
-                var tmpAnchor = baseURL.split("#");
-                var TheParams = tmpAnchor[0];
-                TheAnchor  = tmpAnchor[1];
-
-                if(TheParams)
-                    baseURL = TheParams;
-            }
-
-            if(TheAnchor)
-                paramVal += "#" + TheAnchor;
-
-            var rows_txt = temp + "" + param + "=" + paramVal;
-            return baseURL + "?" + newAdditionalURL + rows_txt;
         }
     </script>
 </head>

@@ -1,6 +1,8 @@
 <?php
+
+use League\OAuth2\Client\Token\AccessTokenInterface;
+
 require_once 'vendor/autoload.php';
-require_once 'database_access.php';
 
 function getCurrentUrl() : string
 {
@@ -16,7 +18,7 @@ function getCurrentUrl() : string
     return $url;
 }
 
-function checkOrAuthenticate(string $appId, string $appSecret, string $tenant) : string
+function checkOrAuthenticate(string $appId, string $appSecret, string $tenant) : array
 {
     if (isset($_SESSION['username']) && !ctype_space($_SESSION['username'])) {
         return $_SESSION['username'];
@@ -29,11 +31,12 @@ function checkOrAuthenticate(string $appId, string $appSecret, string $tenant) :
         $_SESSION['token'] = $token;
     }
 
-    [$user_name, $token] = getUsername($appId, $appSecret, $tenant, $token);
+    [$user_name, $email, $token] = getUsername($appId, $appSecret, $tenant, $token);
     $_SESSION['username'] = $user_name;
+    $_SESSION['email'] = $email;
     $_SESSION['token'] = $token;
 
-    return $user_name;
+    return [$user_name, $email];
 }
 
 function getProvider(string $appId, string $appSecret, string $tenant) : TheNetworg\OAuth2\Client\Provider\Azure
@@ -49,7 +52,7 @@ function getProvider(string $appId, string $appSecret, string $tenant) : TheNetw
     return $provider;
 }
 
-function authenticate(string $appId, string $appSecret, string $tenant) : \League\OAuth2\Client\Token\AccessTokenInterface
+function authenticate(string $appId, string $appSecret, string $tenant) : AccessTokenInterface
 {
     $provider = getProvider($appId, $appSecret, $tenant);
 
@@ -77,7 +80,7 @@ function authenticate(string $appId, string $appSecret, string $tenant) : \Leagu
     }
 }
 
-function getUsername(string $appId, string $appSecret, string $tenant, \League\OAuth2\Client\Token\AccessTokenInterface $token)
+function getUsername(string $appId, string $appSecret, string $tenant, AccessTokenInterface $token): array
 {
     $provider = getProvider($appId, $appSecret, $tenant);
 
@@ -97,7 +100,7 @@ function getUsername(string $appId, string $appSecret, string $tenant, \League\O
     $user = $provider->get($provider->getRootMicrosoftGraphUri($token) . '/v1.0/me', $token);
 
     // Use this to interact with an API on the users behalf
-    return [$user['displayName'], $token];
+    return [$user['displayName'], $user['mail'], $token];
 }
 
 function logout(string $appId, string $appSecret, string $tenant)
