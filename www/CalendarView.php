@@ -91,10 +91,15 @@ html;
 
     $days = array("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi");
 
-    if (array_key_exists('room_id', $_GET))
-        $current_room = current(array_values(array_filter($available_rooms, function ($r) {
+    if (array_key_exists('room_id', $_GET)) {
+        $current_rooms_array = array_values(array_filter($available_rooms, function ($r) {
             return strval($r->id) == $_GET['room_id'];
-        }))) ?? $available_rooms[0];
+        }));
+        if (count($current_rooms_array) > 0)
+            $current_room = $current_rooms_array[0];
+        else
+            $current_room = $available_rooms[0];
+    }
     else
         $current_room = $available_rooms[0];
 
